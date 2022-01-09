@@ -21,14 +21,20 @@ package org.javalite.activejdbc;
 import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
 import org.javalite.activejdbc.test.ActiveJDBCTest;
 import org.javalite.activejdbc.test_models.*;
-import org.javalite.common.JsonHelper;
+
 import org.javalite.common.Util;
 import org.junit.Test;
 
 import java.text.ParseException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalField;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+
+import static org.javalite.activejdbc.test.JdbcProperties.driver;
 
 /**
  * @author Igor Polevoy
@@ -41,7 +47,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         Person p = Person.findFirst("name = ? and last_name = ? ", "John", "Smith");
         //test no indent
         String json = p.toJson(false, "name", "last_name", "dob");
-        Map  map = JsonHelper.toMap(json);
+        Map  map = JSONHelper.toMap(json);
 
         a(map.get("name")).shouldBeEqual("John");
         a(map.get("last_name")).shouldBeEqual("Smith");
@@ -55,7 +61,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         User u = personList.get(0);
         String json = u.toJson(true);
 
-        Map m = JsonHelper.toMap(json);
+        Map m = JSONHelper.toMap(json);
 
         a(m.get("first_name")).shouldBeEqual("Marilyn");
         a(m.get("last_name")).shouldBeEqual("Monroe");
@@ -73,7 +79,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         List<User> personList = User.findAll().orderBy("id").include(Address.class);
         User u = personList.get(0);
         String json = u.toJson(false);
-        Map m = JsonHelper.toMap(json);
+        Map m = JSONHelper.toMap(json);
 
         a(m.get("first_name")).shouldBeEqual("Marilyn");
         a(m.get("last_name")).shouldBeEqual("Monroe");
@@ -91,7 +97,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
 
         User u = User.findById(1);
         String json = u.toJson(true, "email", "last_name");
-        JsonHelper.toJsonString(json); // validate
+        JSONHelper.toJsonString(json); // validate
         the(json).shouldBeEqual("{\n" +
                 "  \"email\":\"mmonroe@yahoo.com\",\n" +
                 "  \"last_name\":\"Monroe\"\n" +
@@ -104,14 +110,14 @@ public class ToJsonSpec extends ActiveJDBCTest {
         LazyList<User> personList = User.findAll().orderBy("id").include(Address.class);
 
         String json = personList.toJson(false);
-        JsonHelper.toJsonString(json); // validate
+        JSONHelper.toJsonString(json); // validate
     }
 
     @Test
     public void shouldEscapeDoubleQuote() {
         Page p = new Page();
         p.set("description", "bad \"/description\"");
-        Map map = JsonHelper.toMap(p.toJson(true));
+        Map map = JSONHelper.toMap(p.toJson(true));
         a(map.get("description").toString()).shouldBeEqual("bad \"/description\"");
 
         //ensure no NPE:
@@ -128,25 +134,32 @@ public class ToJsonSpec extends ActiveJDBCTest {
         Post p = Post.findById(1);
         String json = p.toJson(true, "title");
 
-        Map map = JsonHelper.toMap(json);
+        Map map = JSONHelper.toMap(json);
         Map injected = (Map) map.get("injected");
         a(injected.get("secret_name")).shouldBeEqual("Secret Name");
     }
 
     @Test
-    public void shouldReturnSecondsInDateTime() throws ParseException {
+    public void shouldReturnSecondsInDateTime() {
         Person p = new Person();
         p.set("name", "john", "last_name", "doe").saveIt();
         p.refresh();
         String json = p.toJson(true);
 
-        System.out.println(json);
         @SuppressWarnings("unchecked")
-        Map<String, String> map = JsonHelper.toMap(json);
-
-        Date d = new ISO8601DateFormat().parse(map.get("created_at"));
+        Map<String, String> map = JSONHelper.toMap(json);
+        LocalDateTime ldt = Convert.toLocalDateTime(map.get("created_at"));
         // difference between date in Json and in original model instance should be less than 1000 milliseconds
-        a(Math.abs(d.getTime() - p.getTimestamp("created_at").getTime()) < 1000L).shouldBeTrue();
+
+
+        System.out.println(ldt);
+        System.out.println(p.getLocalDateTime("created_at"));
+
+        System.out.println(ZonedDateTime.of(ldt, ZoneId.systemDefault()).toInstant().toEpochMilli());
+        System.out.println(ZonedDateTime.of(p.getLocalDateTime("created_at"), ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+        a(Math.abs(ZonedDateTime.of(ldt, ZoneId.systemDefault()).toInstant().toEpochMilli()
+                - ZonedDateTime.of(p.getLocalDateTime("created_at"), ZoneId.systemDefault()).toInstant().toEpochMilli() ) < 1000L).shouldBeTrue();
     }
 
     @Test

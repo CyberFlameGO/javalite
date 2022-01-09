@@ -25,6 +25,9 @@ import java.io.Writer;
 import java.math.BigDecimal;
 import java.sql.Blob;
 import java.sql.Clob;
+import java.text.SimpleDateFormat;
+import java.sql.Timestamp;
+import java.time.*;
 import java.util.Calendar;
 import java.util.TimeZone;
 
@@ -43,11 +46,8 @@ public final class Convert {
             return Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         }
     };
-    private static final ThreadLocal<Calendar> THREADLOCAL_CAL_DEFAULT = new ThreadLocal<Calendar>() {
-        @Override protected Calendar initialValue(){
-            return Calendar.getInstance();
-        }
-    };
+    private static final ThreadLocal<Calendar> THREADLOCAL_CAL_DEFAULT = ThreadLocal.withInitial(Calendar::getInstance);
+    private static final ThreadLocal<SimpleDateFormat> FORMATTER = ThreadLocal.withInitial(() -> new SimpleDateFormat("dd-MM-yyyy"));
 
     private Convert() {
         // not instantiable
@@ -144,6 +144,8 @@ public final class Convert {
             return new java.sql.Date(((java.util.Date) value).getTime());
         } else if (value instanceof Number) {
             return new java.sql.Date(((Number) value).longValue());
+        } else if (value instanceof LocalDateTime) {
+            return new java.sql.Date(toLong(value));
         } else {
             try {
                 return java.sql.Date.valueOf(value.toString().trim());
@@ -279,17 +281,105 @@ public final class Convert {
      * @return instance of java.sql.Time
      */
     public static java.sql.Time toTime(Object value) {
-       if (value == null) {
+        if (value == null) {
             return null;
         } else if (value instanceof java.sql.Time) {
             return (java.sql.Time) value;
         } else if (value instanceof java.util.Date) {
            return new java.sql.Time(((java.util.Date) value).getTime());
+        } else if (value instanceof java.sql.Date) {
+            return new java.sql.Time(((java.sql.Date) value).getTime());
         } else if (value instanceof Number) { // SQLite returns TIME as Integer
            return new java.sql.Time(((Number) value).longValue());
+        } else if (value instanceof LocalDateTime) {
+           return new java.sql.Time(toLong(value));
         } else {
            return java.sql.Time.valueOf(value.toString().trim());
         }
+    }
+
+
+
+    /**
+     * Converts a value to <code>LocalDate</code>. Tries to convert to <code>java.util.Date</code>, then to <code>LocalDate</code>.
+     * If that does not work, tries to convert to <code>String</code>, then to <code>Date</code>, and so on.
+     *
+     * @param value value to convert
+     * @return converted LocalDate
+     */
+    public static LocalDate toLocalDate(Object value){
+        if (value == null) {
+            return null;
+        } else if (value instanceof LocalDate) {
+            return (LocalDate) value;
+        } else if (value instanceof java.util.Date) {
+            return toLocalDate((java.util.Date)value);
+        }else{
+            try{
+                return toLocalDate(FORMATTER.get().parse(value.toString()));
+            }catch(java.text.ParseException e){
+                throw new ConversionException("failed to convert: '" + value + "' to LocalDate", e);
+            }
+        }
+    }
+
+    public static LocalDate toLocalDate(java.util.Date date){
+            Instant instant = date.toInstant();
+            ZonedDateTime zone = instant.atZone(ZoneId.systemDefault());
+            return zone.toLocalDate();
+    }
+
+    /**
+     * Converts a value to <code>LocalDateTime</code>. Tries to convert to <code>java.util.Date</code>, then to <code>LocalDateTime</code>.
+     * If that does not work, tries to convert to <code>Long</code>. If all fails, it tries to parse the value from the string representation of the argument.
+     *
+     * @param value value to convert
+     * @return converted LocalDateTime
+     */
+
+    public static LocalDateTime toLocalDateTime(Object value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof LocalDateTime) {
+            return (LocalDateTime) value;
+        } else if (value instanceof Timestamp) {
+            return toLocalDateTime(((Timestamp) value).getTime());
+        } else if (value instanceof java.util.Date) {
+            return toLocalDateTime(((java.util.Date) value).getTime());
+        } else if (value instanceof Long) {
+            return toLocalDateTime(((Long) value).longValue());
+        }else {
+            try {
+                return LocalDateTime.parse(value.toString());
+            } catch (Exception e) {
+                try{
+                    //say, this is a ISO string?
+                    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX");
+                    return LocalDateTime.parse(value.toString(), dtf);
+
+                }catch(Exception ex){
+                    throw new ConversionException("failed to convert: '" + value + "' to LocalDateTime", e);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * @param millis milliseconds to convert to <code>LocalDateTime</code>.
+     * @param timeZone time zone.
+     * @return instance of <code>LocalDateTime</code>.
+     */
+    public static LocalDateTime toLocalDateTime(long millis, TimeZone timeZone){
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), timeZone.toZoneId());
+    }
+
+    /**
+     * @param millis milliseconds to convert to <code>LocalDateTime</code>. Uses a default time zone.
+     * @return instance of <code>LocalDateTime</code>.
+     */
+    public static LocalDateTime toLocalDateTime(long millis){
+        return toLocalDateTime(millis,TimeZone.getDefault());
     }
 
     /**
@@ -302,7 +392,7 @@ public final class Convert {
      * @return instance of Timestamp.
      */
     public static java.sql.Timestamp toTimestamp(Object value) {
-       if (value == null) {
+        if (value == null) {
             return null;
         } else if (value instanceof java.sql.Timestamp) {
             return (java.sql.Timestamp) value;
@@ -310,7 +400,9 @@ public final class Convert {
            return new java.sql.Timestamp(((java.util.Date) value).getTime());
         } else if (value instanceof Number) {
            return new java.sql.Timestamp(((Number) value).longValue());
-       } else {
+        } else if (value instanceof LocalDateTime) {
+            return java.sql.Timestamp.valueOf((LocalDateTime)value);
+        } else {
            return java.sql.Timestamp.valueOf(value.toString().trim());
         }
     }
@@ -353,6 +445,8 @@ public final class Convert {
             return ((Number) value).longValue();
         } else if (value instanceof java.util.Date) {
             return ((java.util.Date) value).getTime();
+        } else if (value instanceof LocalDateTime) {
+            return ((LocalDateTime) value).atZone(ZoneOffset.systemDefault()).toInstant().toEpochMilli();
         } else {
             try {
                 return Long.valueOf(value.toString().trim());
