@@ -17,24 +17,25 @@ limitations under the License.
 package org.javalite.activejdbc;
 
 
-
 import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
+import com.fasterxml.jackson.databind.util.StdDateFormat;
 import org.javalite.activejdbc.test.ActiveJDBCTest;
 import org.javalite.activejdbc.test_models.*;
-
+import org.javalite.common.Convert;
 import org.javalite.common.Util;
+import org.javalite.json.JSONHelper;
 import org.junit.Test;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.temporal.TemporalField;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
-import static org.javalite.activejdbc.test.JdbcProperties.driver;
+import static org.javalite.common.Convert.toLocalDateTime;
+import static org.javalite.common.Convert.toLong;
 
 /**
  * @author Igor Polevoy
@@ -148,18 +149,17 @@ public class ToJsonSpec extends ActiveJDBCTest {
 
         @SuppressWarnings("unchecked")
         Map<String, String> map = JSONHelper.toMap(json);
-        LocalDateTime ldt = Convert.toLocalDateTime(map.get("created_at"));
-        // difference between date in Json and in original model instance should be less than 1000 milliseconds
 
+        System.out.println("Map: " + map.get("created_at"));
+        System.out.println("Model: " + p.get("created_at"));
 
-        System.out.println(ldt);
-        System.out.println(p.getLocalDateTime("created_at"));
+        System.out.println("Map ldt: " + toLocalDateTime(map.get("created_at")));
 
-        System.out.println(ZonedDateTime.of(ldt, ZoneId.systemDefault()).toInstant().toEpochMilli());
-        System.out.println(ZonedDateTime.of(p.getLocalDateTime("created_at"), ZoneId.systemDefault()).toInstant().toEpochMilli());
+        long date = toLong(toLocalDateTime(map.get("created_at")));
 
-        a(Math.abs(ZonedDateTime.of(ldt, ZoneId.systemDefault()).toInstant().toEpochMilli()
-                - ZonedDateTime.of(p.getLocalDateTime("created_at"), ZoneId.systemDefault()).toInstant().toEpochMilli() ) < 1000L).shouldBeTrue();
+        System.out.println("Map long: " + date);
+        System.out.println("Model : " + p.get("created_at") + ", " + p.get("created_at").getClass());
+        a(Math.abs(date - p.getTimestamp("created_at").getTime()) < 1000L).shouldBeTrue();
     }
 
     @Test
@@ -188,11 +188,11 @@ public class ToJsonSpec extends ActiveJDBCTest {
     public void shouldKeepParametersCase() {
         Person p = Person.create("name", "Joe", "last_name", "Schmoe");
 
-        Map map = JsonHelper.toMap(p.toJson(true));
+        Map map = JSONHelper.toMap(p.toJson(true));
         a(map.get("name")).shouldBeEqual("Joe");
         a(map.get("last_name")).shouldBeEqual("Schmoe");
 
-        map = JsonHelper.toMap(p.toJson(true, "Name", "Last_Name"));
+        map = JSONHelper.toMap(p.toJson(true, "Name", "Last_Name"));
         a(map.get("Name")).shouldBeEqual("Joe");
         a(map.get("Last_Name")).shouldBeEqual("Schmoe");
     }
@@ -203,7 +203,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         deleteAndPopulateTables("libraries", "books", "readers");
         List<Book> books = Book.findAll().orderBy(Book.getMetaModel().getIdName()).include(Reader.class, Library.class);
 
-        Map book = JsonHelper.toMap(books.get(0).toJson(true));
+        Map book = JSONHelper.toMap(books.get(0).toJson(true));
         Map parents = (Map) book.get("parents");
         the(parents.size()).shouldBeEqual(1);
 
@@ -227,7 +227,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         populateTable("computers");
 
         String json = Computer.findAll().include(Motherboard.class, Keyboard.class).toJson(true);
-        List list = org.javalite.common.JsonHelper.toList(json);
+        List list = JSONHelper.toList(json);
         Map m = (Map) list.get(0);
         Map parents = (Map) m.get("parents");
         List motherboards = (List) parents.get("motherboards");
@@ -242,7 +242,7 @@ public class ToJsonSpec extends ActiveJDBCTest {
         Person p = new Person();
                                                                 //hack to fix a build on Windows
         p.set("name", Util.readResource("/bad.txt").replaceAll("\r\n", "\n"));
-        Map m = JsonHelper.toMap(p.toJson(true));
+        Map m = JSONHelper.toMap(p.toJson(true));
         a(m.get("name")).shouldBeEqual("bad\n\tfor\n\t\tJson");
     }
 }
