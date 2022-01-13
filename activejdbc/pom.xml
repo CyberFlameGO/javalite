@@ -105,15 +105,17 @@
         </profile>
         <profile>
             <id>postgresql</id>
-            <!--
-                Configure jdbc.driver, jdbc.url, jdbc.user, jdbc.password
-                and db properties in your ~/.m2/settings.xml
-            -->
+            <properties>
+                <jdbc.driver>org.postgresql.Driver</jdbc.driver>
+                <jdbc.url>jdbc:postgresql://localhost:5432/postgres</jdbc.url>
+                <jdbc.user>postgres</jdbc.user>
+                <jdbc.password>p@ssw0rd</jdbc.password>
+                <db>postgresql</db>
+            </properties>
             <dependencies>
                 <dependency>
                     <groupId>org.postgresql</groupId>
                     <artifactId>postgresql</artifactId>
-                    <scope>test</scope>
                 </dependency>
             </dependencies>
         </profile>
