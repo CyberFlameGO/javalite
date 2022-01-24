@@ -7,13 +7,12 @@ import org.junit.Test;
 
 import static org.javalite.db_migrator.JdbcPropertiesOverride.*;
 import static org.javalite.test.jspec.JSpec.the;
-import static org.junit.Assert.*;
 import static org.javalite.db_migrator.DbUtils.*;
 
 
-public class MySQLMigrationSpec {
+public class MariaDBSQLMigrationSpec {
     private MigrationManager migrationManager;
-    private final String databaseName = "mysql_migration_test";
+    private final String databaseName = "mariadb_migration_test";
 
     @Before
     public void setup() throws Exception {
@@ -41,7 +40,7 @@ public class MySQLMigrationSpec {
     @Test
     public void shouldApplyPendingMigrations() {
         migrationManager.migrate(new MockLog(), null);
-        assertEquals(countMigrations("schema_version"), 4);
+        the(countMigrations("schema_version")).shouldBeEqual(4);
         the(Base.count("books")).shouldBeEqual(9);
         the(Base.count("authors")).shouldBeEqual(2);
     }
